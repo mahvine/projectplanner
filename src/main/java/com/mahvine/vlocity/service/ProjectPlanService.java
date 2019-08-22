@@ -24,7 +24,7 @@ public class ProjectPlanService {
     public void addDependency(Task task, List<Long> dependencyIds){
         List<Task> allTasks = taskRepo.findByProjectPlan(task.getProjectPlan());
         allTasks = allTasks.stream().filter(projectTask -> dependencyIds.contains(projectTask.getId())).collect(Collectors.toList());
-        
+        List<Task> allDependencies = allTasks;
         
     }
     
