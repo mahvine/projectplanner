@@ -61,10 +61,22 @@ public class Application {
 		              log.info("Successfully created new task!");
 		              
 		          } else if(choice.equalsIgnoreCase("2")) {
-		              
+		        	  log.info("----All tasks------------------");
+		        	  taskRepo.findByProjectPlan(project).forEach(allTask -> {
+		        		  List<Long> depIds = allTask.getDependencies().stream().map( taskDep -> taskDep.getId()).collect(Collectors.toList());
+		        		  log.info("{} - {} ({} days)| Dependencies: {}", allTask.getId(), allTask.getName(), allTask.getDurationInDays(), StringUtils.collectionToDelimitedString(depIds, ","));
+		        	  });
+				      log.info("Enter to continue...");
+				      scanner.nextLine();
+				      clearScreen();
 		          } else if(choice.equalsIgnoreCase("3")) {
+				      clearScreen();
+		        	  updateTask(scanner, project, taskRepo, projectService);		              
+		          } else if(choice.equalsIgnoreCase("4")) {
+		        	  
 		          } else if(choice.equalsIgnoreCase("M")) {
-		              project = null;
+		        	  project = null;
+		          } else if(choice.equalsIgnoreCase("X")) {
 		          } else {
 		              log.info("Invalid choice");   
 		          }
@@ -97,16 +109,20 @@ public class Application {
         		          }
         		      } while(project == null);
 		              log.info("Successfully selected project: "+project.getTitle());
+
+		          } else if(choice.equalsIgnoreCase("X")) {
 		          } else {
 		              log.info("Invalid choice");   
 		          }		          
 		      }
 		    } while(!choice.equalsIgnoreCase("X"));
 			
-			
+
+		      log.info("-------------------------------");
+		      log.info("Application closed...");
 		};
 	}
-	
+
 	public static void generateTask(Scanner scanner, ProjectPlan project, TaskRepository taskRepo, ProjectPlanService projectService){	    
         Task task = new Task();
         log.info("Enter task name:");
@@ -116,7 +132,8 @@ public class Application {
             log.info("Enter task duration in days:");
             try{     		              
                 int duration = scanner.nextInt();
-                  task.setDurationInDays(duration);
+                task.setDurationInDays(duration);
+                String dependencyIds = scanner.nextLine(); //workaround
             } catch(Exception e) {
             }
         } while(task.getDurationInDays() <= 0);
@@ -131,11 +148,72 @@ public class Application {
             log.info(allTask.getId()+" - "+allTask.getName());
         });
 
-        log.info("Select task dependency/s(comma separated):");
+        log.info("Set task dependencies(Comma separated ids/Can leave empty):");
         String dependencyIds = scanner.nextLine();
         List<Long> taskIds = StringUtils.commaDelimitedListToSet(dependencyIds).stream()
             .map( id -> Long.parseLong(id)).collect(Collectors.toList());
-        projectService.addDependency(task, taskIds);
+        if(!taskIds.isEmpty()) {
+        	try {        		
+        		projectService.setDependency(task, taskIds);
+        	} catch(Exception e) {
+        		log.error(e.getMessage());
+        	}
+        }
+	}
+	
+
+	public static void updateTask(Scanner scanner, ProjectPlan project, TaskRepository taskRepo, ProjectPlanService projectService){
+
+	    log.info("----Select task to update -----------");
+        List<Task> allTasks = taskRepo.findByProjectPlan(project);
+        allTasks.forEach( allTask -> {
+            log.info(allTask.getId()+" - "+allTask.getName());
+        });
+	    Task task = null;
+	    do {
+	    	try {
+	    		log.info("Select task ID:");
+	    		Long id = scanner.nextLong();
+	    		task = taskRepo.getOne(id);
+	    	}catch(Exception e) {
+	    		log.error(e.getMessage());
+	    	}
+	    } while(task==null);
+        log.info("Enter task name ({}):",task.getName());
+        String name = scanner.nextLine();
+        if(!name.isEmpty()) {        	
+        	task.setName(name);
+        }
+        do {
+            log.info("Enter task duration in days({}):",task.getDurationInDays());
+            try{
+                String durationStr = scanner.nextLine();
+                if(!durationStr.isEmpty()) {
+                	task.setDurationInDays(Integer.parseInt(durationStr));
+                }
+            } catch(Exception e) {
+            }
+        } while(task.getDurationInDays() <= 0);
+        taskRepo.save(task);
+        
+        
+        log.info("----Select Dependencies-------------");
+        final Long taskId = task.getId();
+        allTasks.forEach( allTask -> {
+        	if(!allTask.getId().equals(taskId)) {
+        		log.info(allTask.getId()+" - "+allTask.getName());
+        	}
+        });
+        List<Long> dependencies = task.getDependencies().stream().map(dependency -> dependency.getId()).collect(Collectors.toList());
+        log.info("Set task dependencies({}/leave empty to remove dependencies):", StringUtils.collectionToDelimitedString(dependencies, ","));
+        String dependencyIds = scanner.nextLine();
+        List<Long> taskIds = StringUtils.commaDelimitedListToSet(dependencyIds).stream()
+            .map( id -> Long.parseLong(id)).collect(Collectors.toList());
+    	try {        		
+    		projectService.setDependency(task, taskIds);
+    	} catch(Exception e) {
+    		log.error(e.getMessage());
+    	}
 	}
 	
 	public static void clearScreen() {  
