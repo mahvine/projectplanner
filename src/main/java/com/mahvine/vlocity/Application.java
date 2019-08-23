@@ -1,5 +1,7 @@
 package com.mahvine.vlocity;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Scanner;
 import java.util.stream.Collectors;
@@ -18,12 +20,15 @@ import com.mahvine.vlocity.repository.ProjectPlanRepository;
 import com.mahvine.vlocity.repository.TaskRepository;
 import com.mahvine.vlocity.service.ProjectPlanService;
 
+import de.vandermeer.asciitable.AsciiTable;
+
 @SpringBootApplication
 public class Application {
 
 	private static final Logger log = LoggerFactory.getLogger(Application.class);
 	
 	Scanner scanner = new Scanner(System.in);
+	final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 	public static void main(String[] args) {
 		SpringApplication.run(Application.class);
@@ -73,7 +78,27 @@ public class Application {
 				      clearScreen();
 		        	  updateTask(scanner, project, taskRepo, projectService);		              
 		          } else if(choice.equalsIgnoreCase("4")) {
+		        	  LocalDate startDate = null;
+
+		        	  do {		        		  
+		        		  log.info("Enter project start date: (Now)/yyyy-MM-dd");
+		        		  String startDateStr = scanner.nextLine();
+		        		  if(startDateStr.isEmpty()) {
+		        			  startDate = LocalDate.now();
+		        		  } else {
+		        			  try {		        				  
+		        				  startDate = LocalDate.parse(startDateStr, formatter);
+		        			  } catch(Exception e) {
+		        				  log.error("Invalid date");
+		        			  }
+		        		  }
+		        	  } while(startDate == null);
+		        	  project = projectPlanRepo.getOne(project.getId());
+		        	  project = projectService.generateSchedule(project, startDate);
 		        	  
+		        	  displayProjectSchedule(project);
+		        	  log.info("Press any key to continue...");
+	        		  scanner.nextLine();
 		          } else if(choice.equalsIgnoreCase("M")) {
 		        	  project = null;
 		          } else if(choice.equalsIgnoreCase("X")) {
@@ -133,7 +158,7 @@ public class Application {
             try{     		              
                 int duration = scanner.nextInt();
                 task.setDurationInDays(duration);
-                String dependencyIds = scanner.nextLine(); //workaround
+                scanner.nextLine(); //workaround
             } catch(Exception e) {
             }
         } while(task.getDurationInDays() <= 0);
@@ -175,6 +200,7 @@ public class Application {
 	    		log.info("Select task ID:");
 	    		Long id = scanner.nextLong();
 	    		task = taskRepo.getOne(id);
+	    		scanner.nextLine(); //workaround
 	    	}catch(Exception e) {
 	    		log.error(e.getMessage());
 	    	}
@@ -217,8 +243,26 @@ public class Application {
 	}
 	
 	public static void clearScreen() {  
-        System.out.print("\033[H\033[2J");  
+        System.out.print("\033[H\033[2J");
         System.out.flush();  
     }
+	
+	public void displayProjectSchedule(ProjectPlan project) {
+		AsciiTable at = new AsciiTable();
+		at.addRule();
+		at.addRow(null,null,null,"Project: "+project.getTitle()+" Schedule");
+		at.addRule();
+		at.addRow("Tasks", "Dependency", "Start Date", "End Date");
+		at.addRule();
+		int i = 1;
+		for(Task task: project.getTasks()) {
+			List<Long> dependencies = task.getDependencies().stream().map(dependency -> dependency.getId()).collect(Collectors.toList());
+	        String dependencyIds = dependencies.isEmpty() ? "None" : StringUtils.collectionToDelimitedString(dependencies, ",");
+			at.addRow(task.getId()+" - "+task.getName(), dependencyIds, formatter.format(task.getStartDate()), formatter.format(task.getEndDate()));
+			at.addRule();
+			i++;
+		}
+	    log.info(at.render());
+	}
 
 }

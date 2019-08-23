@@ -2,6 +2,8 @@ package com.mahvine.vlocity.service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -53,16 +55,56 @@ public class ProjectPlanService {
     	return allDependencies;
     }
     
-    public ProjectPlan generateSchedule(ProjectPlan projectPlan, LocalDate startDate, int resourcePerson) {
+    public ProjectPlan generateSchedule(ProjectPlan projectPlan, LocalDate startDate) {
     	List<Task> allTasks = taskRepo.findByProjectPlan(projectPlan);
-    	Map<Long,Task> startedTasks = new HashMap<Long, Task>();
-    	sortTask(allTasks, startedTasks);
-        return projectPlan;
+    	Map<Long,Task> completedTasks = new HashMap<Long, Task>();
+    	do {
+    		Task readyTask = extractReadyTask(allTasks, completedTasks);
+    		allTasks.remove(readyTask);
+    		LocalDate earliestStart = getEarliestStart(readyTask, completedTasks, startDate);
+    		readyTask.setStartDate(earliestStart);
+    		readyTask.setEndDate(earliestStart.plusDays(readyTask.getDurationInDays() - 1));
+    		completedTasks.put(readyTask.getId(), readyTask);
+    	} while(!allTasks.isEmpty());
+    	List<Task> completedList = new ArrayList<>(completedTasks.values()); 
+    	Collections.sort(completedList, new Comparator<Task>() {
+			@Override
+			public int compare(Task task1, Task task2) {
+				return task1.getStartDate().compareTo(task2.getStartDate());
+			}
+    	});
+    	projectPlan.setTasks(completedList);
+    	return projectPlan;
     }
     
-    List<Task> sortTask(List<Task> allTasks, Map<Long, Task> startedTasks){
-//    	allTasks.sort(new Comparator<Task>());
-    	return allTasks;
+    
+    private Task extractReadyTask(List<Task> tasks, Map<Long, Task> completedTasks) {
+    	for(Task task : tasks) {
+    		boolean ready = true;
+    		for(Task dependency: task.getDependencies()) {
+    			if(!completedTasks.containsKey(dependency.getId())){
+    				ready = false;
+    			}
+    		}
+    		if(ready) {
+    			return task;
+    		}
+    	}
+    	
+    	return null;
+    }
+    
+    private LocalDate getEarliestStart(Task readyTask, Map<Long, Task> completedTasks, LocalDate projectStartDate) {
+    	LocalDate earliestStart = projectStartDate;
+    	for(Task dependency: readyTask.getDependencies()) {
+			Task completedTask = completedTasks.get(dependency.getId());
+			if(completedTask != null) {
+				if(earliestStart.isBefore(completedTask.getEndDate())) {
+					earliestStart = completedTask.getEndDate().plusDays(1);
+				}
+			}
+		}
+    	return earliestStart;
     }
     
 }
