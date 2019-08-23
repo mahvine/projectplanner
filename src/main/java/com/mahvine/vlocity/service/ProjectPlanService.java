@@ -99,7 +99,7 @@ public class ProjectPlanService {
     	for(Task dependency: readyTask.getDependencies()) {
 			Task completedTask = completedTasks.get(dependency.getId());
 			if(completedTask != null) {
-				if(earliestStart.isBefore(completedTask.getEndDate())) {
+				if(!earliestStart.isAfter(completedTask.getEndDate())) {
 					earliestStart = completedTask.getEndDate().plusDays(1);
 				}
 			}
